@@ -62,7 +62,8 @@ EOF
     efiInstallAsRemovable = true;
     device = "nodev";
   };
-  fileSystems."/boot" = { device = "$esp"; fsType = "vfat"; };
+  fileSystems."/boot" = { device = "$bootfsdev"; fsType = "$bootfstype"; };
+  fileSystems."/boot/esp" = { device = "$esp"; fsType = "vfat"; };
 EOF
 )
   else
@@ -218,7 +219,7 @@ isEFI() {
 
 findESP() {
   esp=""
-  for d in /boot/EFI /boot/efi /boot; do
+  for d in /boot/EFI /boot/efi /boot/esp /boot; do
     [[ ! -d "$d" ]] && continue
     [[ "$d" == "$(df "$d" --output=target | sed 1d)" ]] \
       && esp="$(df "$d" --output=source | sed 1d)" \
@@ -242,6 +243,8 @@ prepareEnv() {
   #                   (get root mount)  (get partition or logical volume)
   rootfsdev=$(mount | grep "on / type" | awk '{print $1;}')
   rootfstype=$(df $rootfsdev --output=fstype | sed 1d)
+  bootfsdev=$(mount | grep "on /boot type" | awk '{print $1;}')
+  bootfstype=$(df $bootfsdev --output=fstype | sed 1d)
 
   # DigitalOcean doesn't seem to set USER while running user data
   export USER="root"
@@ -376,8 +379,11 @@ infect() {
   mv -v /boot /boot.bak || { cp -a /boot /boot.bak ; rm -rf /boot/* ; umount /boot ; }
   if isEFI; then
     mkdir -p /boot
-    mount "$esp" /boot
+    mount "$bootfsdev" /boot
     find /boot -depth ! -path /boot -exec rm -rf {} +
+    mkdir -p /boot/esp
+    mount "$esp" /boot/esp
+    find /boot/esp -depth ! -path /boot/esp -exec rm -rf {} +
   fi
   /nix/var/nix/profiles/system/bin/switch-to-configuration boot
 }
